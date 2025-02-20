@@ -14,7 +14,7 @@ It is designed to help agricultural businesses make data-driven decisions and im
   - Comparison of **Random Forest**, **SVM**, and **XGBoost** classifiers.
 
 - **Clustering Models:**
-  - **KMeans** clustering with 3D visualization using PCA.
+  - **KMeans** clustering with 3D visualization using PCA to reduce dimensionality.
 
 - **Interactive Interface:**
   - Select models, view metrics, and interact with visualizations.
