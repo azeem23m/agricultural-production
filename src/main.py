@@ -25,8 +25,6 @@ original.sort()
 df['label'] = label_enc.fit_transform(df['label'])
 label_map = {enc : ori for enc, ori in enumerate(original)}
 
-print(label_map)
-
 X = df.drop(columns=['label'])
 y = df['label']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -60,6 +58,88 @@ for model_name, model in models.items():
         'confusion_matrix': cm,
         'classification_report': classification_report(y_test, y_pred)
     }
+
+
+def describe_clusters(cluster_centers, clusters):
+
+    overall_means = cluster_centers.mean()
+    overall_std = cluster_centers.std()
+
+    clusters_desc = {}
+    clusters_crops = {}
+    
+    
+    for idx, center in enumerate(cluster_centers):
+        features = []
+
+        # If a feature is greater than mean by 30% then consider High, else if less than mean by 30% consider Low
+        # Else consider Moderate
+
+        npk_values = center[:3]
+        npk_mean = npk_values.mean()
+        
+        if npk_mean > df[['N', 'P', 'K']].mean().mean() * 1.3:
+            features.append("Nutrient-Rich")
+        elif npk_mean < df[['N', 'P', 'K']].mean().mean() * 0.7:
+            features.append("Nutrient-Poor")
+        else:
+            features.append("Balanced-Nutrients")
+        
+        
+        if center[3] > center[3].mean() * 1.3:
+            features.append("Warm-Climate")
+        elif center[3] < center[3] * 0.7:
+            features.append("Cool-Climate")
+        else:
+            features.append("Moderate-Climate")
+        
+        if center[4] > center[4].mean() * 1.3:
+            features.append("High-Humidity")
+        elif center[4] < center[4] * 0.7:
+            features.append("Low-Humidity")
+        else:
+            features.append("Moderate-Humidity")
+        
+        if center[5] > 7.5:
+            features.append("Alkaline-Soil")
+        elif center[5] < 5.5:
+            features.append("Acidic-Soil")
+        else:
+            features.append("Neutral-Soil")
+        
+        if center[6] > center[6].mean() * 1.3:
+            features.append("High-Rainfall")
+        elif center[6] < center[6] * 0.7:
+            features.append("Low-Rainfall")
+        else:
+            features.append("Moderate-Rainfall")
+        
+        clusters_desc[idx] = f"{'\t'.join(features)}"
+        clusters_crops[idx] = list(df[clusters == idx]['label'].map(label_map).unique())
+    return clusters_desc, clusters_crops
+
+
+
+kmeans_info = {}
+intertias = []
+for k in range(2, 11):
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    clusters = kmeans.fit_predict(df)
+    centers = kmeans.cluster_centers_
+    silhouette_avg = silhouette_score(df, clusters)
+    intertias.append(kmeans.inertia_)
+    desc, crops = describe_clusters(centers, clusters)
+    kmeans_info[k] = {
+        'silhouette_score':silhouette_avg,
+        'clusters': clusters,
+        'clusters_desc': desc,
+        'clusters_crops': crops
+    }
+
+pca = PCA(n_components=3)
+X_pca = pca.fit_transform(X_train)
+
+
 
 app.layout = html.Div([
     html.H1("Agricultural Production Optimization", style={'textAlign':'center'}),
@@ -122,6 +202,7 @@ app.layout = html.Div([
           value=3,
           marks={i: str(i) for i in range(2, 11)}
       ),
+      html.Div(id='clusters-info'),
       html.Div(id='silhouette-score', children="Silhouette Score: N/A")
   ]),
 
@@ -207,41 +288,26 @@ def plot_elbow_method(n_clicks):
     if n_clicks == 0:
         return {}
     
-    inertias = []
-    K = range(1, 11)
-    
-    for k in K:
-        kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
-        kmeans.fit(X_train)
-        inertias.append(kmeans.inertia_)
-    
-    fig = go.Figure(data=go.Scatter(x=list(K), y=inertias, mode='lines+markers'))
+    fig = go.Figure(data=go.Scatter(x=list(range(1, 11)), y=intertias, mode='lines+markers'))
     fig.update_layout(
         title='Elbow Method for Optimal k',
         xaxis_title='k',
         yaxis_title='Inertia'
     )
-    
+
     return fig
 
 @app.callback(
     [Output('cluster-plot', 'figure'),
-     Output('silhouette-score', 'children')],
+     Output('silhouette-score', 'children'),
+     Output('clusters-info', 'children')],
     [Input('cluster-button', 'n_clicks')],
     [State('k-slider', 'value')]
 )
 def update_clustering(n_clicks, k):
     if n_clicks == 0:
-        return {}, "Silhouette Score: N/A"
-    
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    clusters = kmeans.fit_predict(X_train)
-    
-    silhouette_avg = silhouette_score(X_train, clusters)
-    
-    pca = PCA(n_components=3)
-    X_pca = pca.fit_transform(X_train)
-    
+        return {}, "Silhouette Score: N/A", "Clusters Descriptions: N/A"
+
     fig = go.Figure(data=[go.Scatter3d(
         x=X_pca[:, 0],
         y=X_pca[:, 1],
@@ -249,7 +315,7 @@ def update_clustering(n_clicks, k):
         mode='markers',
         marker=dict(
             size=5,
-            color=clusters,
+            color=kmeans_info[k]['clusters'],
             colorscale='Viridis',
             opacity=0.8,
             showscale=True
@@ -265,8 +331,17 @@ def update_clustering(n_clicks, k):
         ),
         margin=dict(l=0, r=0, b=0, t=30)
     )
-    
-    return fig, f'Silhouette Score: {silhouette_avg:.2f}'
+
+    clusters_info = []
+    for i, desc in kmeans_info[k]['clusters_desc'].items():
+        clusters_info.append(
+            html.Div([
+                html.P(f"Cluster {i+1}: {desc}"),
+                html.P(f"Crops: {', '.join(kmeans_info[k]['clusters_crops'][i])}"),
+                html.Br()
+            ])
+        )
+    return fig, f'Silhouette Score: {kmeans_info[k]['silhouette_score']:.2f}', clusters_info
 
 @app.callback(
     Output('model-comparison-table', 'children'),
