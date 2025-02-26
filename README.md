@@ -11,15 +11,18 @@ It is designed to help agricultural businesses make data-driven decisions and im
   - Visualizion the distribution of each feature.
 
 - **Classification Models:**
-  - Comparison of **Random Forest**, **SVM**, and **XGBoost** classifiers.
+  - Comparison of **Random Forest**, **SVM**, and **XGBoost** classifiers by Precision, Recall and F1 Score.
 
 - **Clustering Models:**
-  - **KMeans** clustering with 3D visualization using PCA to reduce dimensionality.
+  - **KMeans** clustering with visualization using PCA to reduce dimensionality to 3D.
+  - Analysis and description each cluster by extracting key characteristics.
 
 - **Interactive Interface:**
   - Select models, view metrics, and interact with visualizations.
+## Live Demo
+[Website](https://azeem23m.pythonanywhere.com/)
 
-## Installation & Usage
+## Local Installation & Usage
 
 To set up and run the project locally:
    ```bash
