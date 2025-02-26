@@ -124,9 +124,9 @@ kmeans_info = {}
 intertias = []
 for k in range(2, 11):
     kmeans = KMeans(n_clusters=k, random_state=42)
-    clusters = kmeans.fit_predict(df)
+    clusters = kmeans.fit_predict(X)
     centers = kmeans.cluster_centers_
-    silhouette_avg = silhouette_score(df, clusters)
+    silhouette_avg = silhouette_score(X, clusters)
     intertias.append(kmeans.inertia_)
     desc, crops = describe_clusters(centers, clusters)
     kmeans_info[k] = {
