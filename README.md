@@ -11,6 +11,7 @@ It is designed to help agricultural businesses make data-driven decisions and im
   - Visualizion the distribution of each feature.
 
 - **Classification Models:**
+  - Applied classification models to predict crop by its growth conditions.
   - Comparison of **Random Forest**, **SVM**, and **XGBoost** classifiers by Precision, Recall and F1 Score.
 
 - **Clustering Models:**
