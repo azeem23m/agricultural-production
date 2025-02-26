@@ -341,7 +341,8 @@ def update_clustering(n_clicks, k):
                 html.Br()
             ])
         )
-    return fig, f'Silhouette Score: {kmeans_info[k]['silhouette_score']:.2f}', clusters_info
+    sill_score = kmeans_info[k]['silhouette_score']
+    return fig, f'Silhouette Score: {sill_score:.2f}', clusters_info
 
 @app.callback(
     Output('model-comparison-table', 'children'),
@@ -357,10 +358,10 @@ def update_model_comparison(n_clicks):
     for model_name, performance in model_performance.items():
         rows.append([
             model_name,
-            f"{performance['accuracy']:.2f}",
-            f"{performance['precision']:.2f}",
-            f"{performance['recall']:.2f}",
-            f"{performance['f1']:.2f}"
+            str(round(performance['accuracy'], 2)),
+            str(round(performance['precision'], 2)),
+            str(round(performance['recall'], 2)),
+            str(round(performance['f1'], 2))
         ])
     
     rows.sort(key=lambda x: float(x[1]), reverse=True)
