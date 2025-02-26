@@ -114,7 +114,7 @@ def describe_clusters(cluster_centers, clusters):
         else:
             features.append("Moderate-Rainfall")
         
-        clusters_desc[idx] = f"{'\t'.join(features)}"
+        clusters_desc[idx] = '\t'.join(features)
         clusters_crops[idx] = list(df[clusters == idx]['label'].map(label_map).unique())
     return clusters_desc, clusters_crops
 
