@@ -12,7 +12,6 @@ from sklearn.decomposition import PCA
 import plotly.express as px
 import plotly.graph_objs as go
 import xgboost as xgb
-from scipy import stats
 
 app = dash.Dash(__name__)
 app.config.suppress_callback_exceptions=True
