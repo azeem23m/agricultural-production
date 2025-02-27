@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.cluster import KMeans
-from sklearn.metrics import confusion_matrix, classification_report, silhouette_score, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc, silhouette_score, accuracy_score, precision_score, recall_score, f1_score
 from sklearn.decomposition import PCA
 import plotly.express as px
 import plotly.graph_objs as go
@@ -35,29 +35,54 @@ X_test = scaler.transform(X_test)
 
 models = {
     'Random Forest': RandomForestClassifier(random_state=42),
-    'SVM': SVC(probability=True, random_state=42),
+    'SVM': SVC(kernel='rbf', C=10, probability=True, random_state=42),
     'XGBoost': xgb.XGBClassifier(random_state=42)
 }
 
 model_performance = {}
+
 for model_name, model in models.items():
+
     model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
+
+    y_pred_test = model.predict(X_test)
+    y_pred_train = model.predict(X_train)
+    y_pred_proba = model.predict_proba(X_test)
+
+
+    test_accuracy = accuracy_score(y_test, y_pred_test)
+    train_accuracy = accuracy_score(y_train, y_pred_train)
     
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, average='weighted')
-    recall = recall_score(y_test, y_pred, average='weighted')
-    f1 = f1_score(y_test, y_pred, average='weighted')
-    cm = confusion_matrix(y_test, y_pred)
-    
+    precision = precision_score(y_test, y_pred_test, average='weighted')
+    recall = recall_score(y_test, y_pred_test, average='weighted')
+    f1 = f1_score(y_test, y_pred_test, average='weighted')
+    cm = confusion_matrix(y_test, y_pred_test)
+
+    fpr = {}
+    tpr = {}
+    roc_auc = {}
+    n_classes = len(np.unique(y_test))
+
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(
+            (y_test == i).astype(int), 
+            y_pred_proba[:, i]
+        )
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
     model_performance[model_name] = {
-        'accuracy': accuracy,
+        'train_accuracy': train_accuracy,
+        'test_accuracy': test_accuracy,
         'precision': precision,
         'recall': recall,
         'f1': f1,
         'confusion_matrix': cm,
-        'classification_report': classification_report(y_test, y_pred)
+        'classification_report': classification_report(y_test, y_pred_test),
+        'fpr': fpr,
+        'tpr': tpr,
+        'roc_auc': roc_auc
     }
+
 
 
 def describe_clusters(cluster_centers, clusters):
@@ -183,7 +208,15 @@ app.layout = html.Div([
         ),
         html.Button('Show Model Performance', id='show-performance-button', n_clicks=0),
         html.Div(id='performance-metrics'),
-        dcc.Graph(id='confusion-matrix'),
+        html.Div(id='train-test'),
+        html.Div(
+            [dcc.Graph(id='confusion-matrix'),
+        dcc.Graph(id='roc-curve')],
+        style={
+            'display': 'flex',
+            'flexDirection': 'row',
+            'justifyContent': 'space-between',
+        })
     ]),
     
     html.Hr(),
@@ -259,17 +292,18 @@ def update_correlation_matrix(input_value):
 
 @app.callback(
     [Output('performance-metrics', 'children'),
-     Output('confusion-matrix', 'figure')],
+    Output('train-test', 'children'),
+    Output('confusion-matrix', 'figure')],
+    Output('roc-curve', 'figure'),
     [Input('show-performance-button', 'n_clicks')],
     [State('model-dropdown', 'value')]
 )
 def show_model_performance(n_clicks, model_name):
     if n_clicks == 0:
-        return "Select a model and click 'Show Model Performance' to see results.", {}
+        return "Select a model and click 'Show Model Performance' to see results.", {}, {}, {}
     
-    performance = model_performance[model_name]
-    report = performance['classification_report']
-    cm = performance['confusion_matrix']
+    report = model_performance[model_name]['classification_report']
+    cm = model_performance[model_name]['confusion_matrix']
     
     cm_fig = px.imshow(cm, 
                        labels=dict(x="Predicted", y="Actual"),
@@ -277,8 +311,46 @@ def show_model_performance(n_clicks, model_name):
                        text_auto=True
                        )
     cm_fig.update_layout(width=700, height=700)
+
+
+    roc_fig = go.Figure()
+    n_classes = len(fpr)
     
-    return html.Pre(report), cm_fig
+    colors = ['#3182bd', '#3182bd', '#6baed6', '#9ecae1', '#c6dbef', '#e6550d', '#fd8d3c', '#fdae6b', '#fdd0a2', 
+            '#31a354', '#74c476', '#a1d99b', '#c7e9c0', '#756bb1', '#9e9ac8', '#bcbddc', '#dadaeb', '#636363', 
+            '#969696', '#bdbdbd', '#d9d9d9', '#d9d9d9']
+    for i in range(n_classes):
+        roc_fig.add_trace(
+            go.Scatter(
+                x=model_performance[model_name]['fpr'][i], 
+                y=model_performance[model_name]['tpr'][i],
+                name=f"{label_map[i]} (AUC = {model_performance[model_name]['roc_auc'][i]:.4f})",
+                line=dict(color=colors[i], width=2)
+            )
+        )
+    
+    roc_fig.add_trace(
+        go.Scatter(
+            x=[0, 1], 
+            y=[0, 1],
+            name='Random Guess',
+            line=dict(color="gray", width=2, dash="dash")
+        )
+    )
+    
+    roc_fig.update_layout(
+        title="ROC Curve",
+        xaxis_title="False Positive Rate",
+        yaxis_title="True Positive Rate",
+        width=800,
+        height=800,
+        
+    )
+
+    train_acc = model_performance[model_name]['train_accuracy']
+    test_acc = model_performance[model_name]['test_accuracy']
+
+    return html.Pre(report), html.Div([html.P(f"Training Accuracy: {train_acc:.2f}"),html.P(f"Testing Accuracy: {test_acc:.2f}")]), cm_fig, roc_fig
 
 @app.callback(
     Output('elbow-plot', 'figure'),
@@ -352,13 +424,14 @@ def update_model_comparison(n_clicks):
     if n_clicks == 0:
         return ""
     
-    headers = ['Model', 'Accuracy', 'Precision', 'Recall', 'F1 Score']
+    headers = ['Model', 'Training Accuracy', 'Testing Accuracy', 'Precision', 'Recall', 'F1 Score']
     rows = []
     
     for model_name, performance in model_performance.items():
         rows.append([
             model_name,
-            str(round(performance['accuracy'], 2)),
+            str(round(performance['train_accuracy'], 2)),
+            str(round(performance['test_accuracy'], 2)),
             str(round(performance['precision'], 2)),
             str(round(performance['recall'], 2)),
             str(round(performance['f1'], 2))
